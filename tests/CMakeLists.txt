@@ -49,7 +49,7 @@ if(TARGET virtualhid_control_model)
          "${CMAKE_CURRENT_SOURCE_DIR}/unit/test_virtualhid_control_model.cpp")
     if(WIN32 OR APPLE)
         list(APPEND LIBVIRTUALHID_TEST_SOURCES
-             "${CMAKE_CURRENT_SOURCE_DIR}/unit/test_virtualhid_control_license_panel.cpp")
+             "${CMAKE_CURRENT_SOURCE_DIR}/unit/test_virtualhid_control_device_panel.cpp")
     endif()
 endif()
 
@@ -76,12 +76,6 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "FreeBSD")
     list(APPEND LIBVIRTUALHID_TEST_SOURCES
          "${CMAKE_CURRENT_SOURCE_DIR}/unit/test_freebsd_backend.cpp")
 elseif(WIN32)
-    if(NOT TARGET nlohmann_json::nlohmann_json)
-        include("${PROJECT_SOURCE_DIR}/cmake/cpm/CPM.cmake")
-        CPMUsePackageLock("${PROJECT_SOURCE_DIR}/package-lock.cmake")
-        CPMGetPackage(nlohmann_json)
-    endif()
-
     list(APPEND LIBVIRTUALHID_TEST_SOURCES
          "${PROJECT_SOURCE_DIR}/src/platform/windows/driver/rotating_trace_log.cpp"
          "${PROJECT_SOURCE_DIR}/src/platform/windows/broker/xbox_360_software_device.cpp"
@@ -163,15 +157,12 @@ elseif(WIN32)
     endif()
     target_link_libraries(${TEST_BINARY}
       PRIVATE
-      nlohmann_json::nlohmann_json
       advapi32
       bcrypt
-      crypt32
       dinput8
       dxguid
       hid
-      setupapi
-      winhttp)
+      setupapi)
 
     if(TARGET SDL3::SDL3-static)
         target_compile_definitions(${TEST_BINARY} PRIVATE LIBVIRTUALHID_TEST_HAS_SDL3=1)

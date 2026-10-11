@@ -201,7 +201,7 @@ for binary in \
   /usr/bin/xcrun lipo "${binary}" -verify_arch x86_64
 done
 "${build_directory}/tests/test_libvirtualhid" \
-  '--gtest_filter=BrokerLicensePolicyTest.*:GitHubActionsEvaluationTest.*:MacosBrokerProtocolTest.*'
+  '--gtest_filter=License*:MacosBrokerProtocolTest.*'
 
 echo 'Signing and notarizing the DMG; Apple may take several minutes...'
 /bin/bash "${repository_root}/scripts/macos/package-dmg.sh" "${build_directory}" \
@@ -225,6 +225,3 @@ mounted_image=""
 
 echo "Installed signed PR build from $(git -C "${repository_root}" rev-parse --short HEAD)."
 echo "DMG: ${disk_image}"
-echo 'License status:'
-/usr/local/bin/libvirtualhid-license status || true
-echo 'If a license is needed, run: /usr/local/bin/libvirtualhid-license activate'

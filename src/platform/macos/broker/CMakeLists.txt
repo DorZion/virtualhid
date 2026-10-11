@@ -12,16 +12,12 @@ configure_file("${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
 
 add_executable(libvirtualhid_macos_broker MACOSX_BUNDLE
   "${CMAKE_CURRENT_SOURCE_DIR}/libvirtualhid_macos_broker.cpp"
-  "${CMAKE_CURRENT_SOURCE_DIR}/license_manager.mm"
   "${PROJECT_SOURCE_DIR}/assets/macos/libvirtualhid.icns")
 set_source_files_properties("${PROJECT_SOURCE_DIR}/assets/macos/libvirtualhid.icns"
   PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 target_compile_features(libvirtualhid_macos_broker PRIVATE cxx_std_23)
 set_target_properties(libvirtualhid_macos_broker PROPERTIES
   OUTPUT_NAME VirtualHIDBroker
-  OBJCXX_STANDARD 23
-  OBJCXX_STANDARD_REQUIRED ON
-  OBJCXX_EXTENSIONS OFF
   MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/Info.plist")
 target_include_directories(libvirtualhid_macos_broker PRIVATE
   "${PROJECT_SOURCE_DIR}/src"
@@ -33,14 +29,11 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(libvirtualhid_macos_broker PRIVATE -fexperimental-library)
     target_link_options(libvirtualhid_macos_broker PRIVATE -fexperimental-library)
 endif()
-set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/license_manager.mm"
-  PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 if(LIBVIRTUALHID_WARNINGS_AS_ERRORS)
     target_compile_options(libvirtualhid_macos_broker PRIVATE -Werror)
 endif()
 target_link_libraries(libvirtualhid_macos_broker PRIVATE
   "-framework CoreFoundation"
-  "-framework Foundation"
   "-framework IOKit")
 
 add_executable(libvirtualhid_macos_license

@@ -2,10 +2,6 @@ if(NOT WIN32)
     message(FATAL_ERROR "The libvirtualhid Windows broker can only be built on Windows.")
 endif()
 
-include("${PROJECT_SOURCE_DIR}/cmake/cpm/CPM.cmake")
-CPMUsePackageLock("${PROJECT_SOURCE_DIR}/package-lock.cmake")
-CPMGetPackage(nlohmann_json)
-
 add_executable(libvirtualhid_broker
   "${CMAKE_CURRENT_SOURCE_DIR}/libvirtualhid_broker.cpp"
   "${CMAKE_CURRENT_SOURCE_DIR}/xbox_360_software_device.cpp")
@@ -21,15 +17,11 @@ target_compile_definitions(libvirtualhid_broker
   _WIN32_WINNT=0x0A00)
 target_link_libraries(libvirtualhid_broker
   PRIVATE
-  lizardbyte::common
-  nlohmann_json::nlohmann_json
   advapi32
   bcrypt
   cfgmgr32
-  crypt32
   ole32
-  setupapi
-  winhttp)
+  setupapi)
 
 if(MSVC AND LIBVIRTUALHID_BUILD_WINDOWS_DRIVER)
     set_property(TARGET libvirtualhid_broker PROPERTY
@@ -37,7 +29,6 @@ if(MSVC AND LIBVIRTUALHID_BUILD_WINDOWS_DRIVER)
 endif()
 
 if(MSVC)
-    # nlohmann/json uses C++ exceptions while serializing Polar request bodies.
     target_compile_options(libvirtualhid_broker PRIVATE /EHsc /W4)
     if(LIBVIRTUALHID_WARNINGS_AS_ERRORS)
         target_compile_options(libvirtualhid_broker PRIVATE /WX)

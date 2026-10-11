@@ -2,11 +2,12 @@
 
 macOS gamepads use an installed broker with Apple's virtual HID entitlement.
 The C++ library uses the broker for virtual gamepads and CoreGraphics for
-keyboard and mouse input. Creating a gamepad requires a machine license.
+keyboard and mouse input. No license, account, or internet connection is
+needed to create a gamepad.
 All built-in gamepad profiles are accepted, though individual games may map
 them differently.
 
-## Install and activate
+## Install
 
 Install the signed, notarized DMG from the
 [libvirtualhid releases](https://github.com/LizardByte/libvirtualhid/releases).
@@ -20,40 +21,20 @@ In **System Settings > Privacy & Security > Device Control and Data Access**
 cannot display the permission prompt while creating a gamepad. Review the
 signed application before granting this broad device-control permission.
 
-Open **Virtual HID Control** from Applications. In the **License** panel,
-paste the purchased license key and click **Activate license**. Use **Refresh**
-to validate the license online or **Deactivate this machine** to release its
-activation. The tool clears the key field after successful activation.
+Open **Virtual HID Control** from Applications to create and inspect a test
+controller. The host application runs in the normal user session; the broker
+runs as a LaunchDaemon.
 
-You can also activate from Terminal:
-
-```sh
-/usr/local/bin/libvirtualhid-license activate
-/usr/local/bin/libvirtualhid-license status
-```
-
-Terminal activation prompts for the key without echoing it. Use `validate` to
-refresh status or `deactivate` to release this machine's activation. Use
-**Virtual HID Control** to create and inspect a test controller. The host
-application runs in the normal user session; the broker runs as a LaunchDaemon.
-
-## License validation during outages
-
-The broker validates the machine license when it starts and every 24 hours,
-retrying temporary failures about once a minute. While Polar validation is
-unavailable, new creation is limited to one active virtual gamepad. Existing
-gamepads remain for up to one hour; then the broker closes all but one. A yearly
-license must validate within 25 hours of its last successful validation or the
-remaining gamepad closes. After the broker restarts, including after a macOS
-reboot, a yearly license needs online validation before gamepad creation. A
-previously activated lifetime license can keep or create one gamepad while
-Polar is unreachable, with no offline time limit. The broker keeps retrying
-validation about once a minute and returns to the normal 24-hour schedule
-after success. Confirmed revocation or deactivation closes existing gamepads.
+The `/usr/local/bin/libvirtualhid-license` command remains for scripts. Its
+`status`, `activate [machine-name]`, `validate`, and `deactivate` commands no
+longer prompt for a key, always report `Activated` with plan `Unrestricted`,
+and exit with status 0. Upgrade the installed broker as well as applications:
+an older broker still enforces its previous license checks.
 
 ## Troubleshoot
 
-If creation reports `license_required`, activate or validate the license.
+If creation reports `license_required`, an older broker is still installed;
+install the current DMG.
 For `backend_unavailable`, check the installed broker service:
 
 ```sh

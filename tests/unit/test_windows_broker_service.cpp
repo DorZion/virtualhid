@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <ranges>
 #include <span>
@@ -351,85 +352,20 @@ TEST_F(WindowsBrokerServiceTest, DriverRejectsDirectGamepadCreation) {
   EXPECT_EQ(request_error, ERROR_ACCESS_DENIED);
 }
 
-TEST(WindowsBrokerImplementationTest, ReportsDpapiAndPolarFailures) {
-  const auto dpapi_result = lvh::detail::test::broker_persistence_failure(
-    lvh::detail::test::BrokerPersistenceFailure::dpapi
-  );
-  EXPECT_FALSE(dpapi_result.saved);
-  EXPECT_TRUE(dpapi_result.message.starts_with("Unable to protect test state:"))
-    << dpapi_result.message;
-
-  using enum lvh::detail::test::BrokerPolarScenario;
-  for (const auto scenario : {
-         open_failure,
-         timeout_configuration_failure,
-         connect_failure,
-         request_failure,
-         send_failure,
-         receive_failure,
-       }) {
-    const auto result = lvh::detail::test::broker_polar_scenario(scenario);
-    EXPECT_FALSE(result.transport_ok);
-    EXPECT_FALSE(result.error.empty());
+TEST(WindowsBrokerImplementationTest, ReportsUnrestrictedLicenseStatus) {
+  for (const std::uint64_t active_devices : {std::uint64_t {0}, std::uint64_t {3}, std::uint64_t {UINT64_C(0x100000000)}}) {
+    const auto status = lvh::detail::test::broker_license_status(active_devices);
+    EXPECT_EQ(status.version, LVH_WINDOWS_BROKER_PROTOCOL_VERSION);
+    EXPECT_EQ(status.size, sizeof(LvhWindowsBrokerLicenseStatus));
+    EXPECT_EQ(status.state, static_cast<std::uint32_t>(LvhWindowsBrokerLicenseState::licensed));
+    EXPECT_EQ(status.active_devices, static_cast<std::uint32_t>(std::min<std::uint64_t>(active_devices, std::numeric_limits<std::uint32_t>::max())));
+    EXPECT_EQ(status.free_active_device_limit, std::numeric_limits<std::uint32_t>::max());
+    EXPECT_EQ(status.activation_limit, std::numeric_limits<std::uint32_t>::max());
+    EXPECT_EQ(status.activation_usage, 1U);
+    EXPECT_EQ(status.plan_name, "Unrestricted");
+    EXPECT_TRUE(status.customer_email.empty());
+    EXPECT_EQ(status.message, "Activated");
   }
-
-  const auto structured =
-    lvh::detail::test::broker_polar_scenario(structured_error);
-  EXPECT_TRUE(structured.transport_ok);
-  EXPECT_EQ(structured.http_status, 422U);
-  EXPECT_EQ(structured.error, "License activation was rejected.");
-
-  const auto malformed =
-    lvh::detail::test::broker_polar_scenario(malformed_error);
-  EXPECT_TRUE(malformed.transport_ok);
-  EXPECT_EQ(malformed.http_status, 422U);
-  EXPECT_EQ(malformed.error, "The license service returned an error.");
-
-  const auto succeeded = lvh::detail::test::broker_polar_scenario(success);
-  EXPECT_TRUE(succeeded.transport_ok);
-  EXPECT_EQ(succeeded.http_status, 200U);
-  EXPECT_TRUE(succeeded.server_time_available);
-  EXPECT_TRUE(succeeded.error.empty());
-  EXPECT_TRUE(succeeded.timeouts_configured);
-  EXPECT_EQ(succeeded.resolve_timeout, 5000);
-  EXPECT_EQ(succeeded.connect_timeout, 5000);
-  EXPECT_EQ(succeeded.send_timeout, 5000);
-  EXPECT_EQ(succeeded.receive_timeout, 10000);
-  EXPECT_NE(succeeded.request_headers.find(L"Polar-Version: 2026-04\r\n"), std::wstring::npos);
-}
-
-TEST(WindowsBrokerImplementationTest, BoundsOfflineSubscriptionValidation) {
-  const auto policy = lvh::detail::test::broker_subscription_validation_policy();
-  EXPECT_TRUE(policy.yearly_benefit_is_subscription_backed);
-  EXPECT_TRUE(policy.subscription_validation_before_deadline_is_current);
-  EXPECT_TRUE(policy.subscription_validation_at_deadline_is_stale);
-}
-
-TEST(WindowsBrokerImplementationTest, ReportsOnlyPendingGamepadUsage) {
-  const auto result = lvh::detail::test::broker_usage_policy();
-  EXPECT_TRUE(result.pending_usage_round_trips);
-  EXPECT_TRUE(result.routine_validation_omits_increment);
-  EXPECT_TRUE(result.pending_validation_increments_usage);
-}
-
-TEST(WindowsBrokerImplementationTest, EnforcesLimitedUnvalidatedFallback) {
-  const auto policy = lvh::detail::test::broker_license_fallback_policy();
-  EXPECT_TRUE(policy.same_boot_anchor_is_accepted);
-  EXPECT_TRUE(policy.changed_boot_anchor_is_rejected);
-  EXPECT_TRUE(policy.uptime_rollback_is_rejected);
-  EXPECT_TRUE(policy.first_unvalidated_device_is_allowed);
-  EXPECT_TRUE(policy.second_unvalidated_device_is_rejected);
-  EXPECT_TRUE(policy.existing_gamepads_are_retained_before_one_hour);
-  EXPECT_TRUE(policy.outage_limit_applies_at_one_hour);
-  EXPECT_TRUE(policy.first_gamepad_is_retained_after_one_hour);
-  EXPECT_TRUE(policy.excess_gamepad_is_revoked_after_one_hour);
-  EXPECT_TRUE(policy.evaluation_gamepad_is_not_outage_limited);
-  EXPECT_TRUE(policy.licensed_device_is_revoked);
-  EXPECT_TRUE(policy.evaluation_device_is_preserved);
-  EXPECT_TRUE(policy.monotonic_clock);
-  EXPECT_TRUE(policy.persisted_boot_anchor_round_trips);
-  EXPECT_EQ(policy.retry_interval_seconds, 60U);
-  EXPECT_EQ(policy.monotonic_timestamp, 1060U);
 }
 
 TEST(WindowsBrokerImplementationTest, RetainsFailedCleanupForRetry) {
@@ -438,22 +374,6 @@ TEST(WindowsBrokerImplementationTest, RetainsFailedCleanupForRetry) {
   EXPECT_TRUE(policy.failed_destruction_is_retried);
   EXPECT_TRUE(policy.successful_destruction_is_forgotten);
   EXPECT_EQ(policy.destruction_attempts, 3U);
-}
-
-TEST(WindowsBrokerImplementationTest, ReportsFilePersistenceFailures) {
-  using enum lvh::detail::test::BrokerPersistenceFailure;
-  for (const auto &[failure, expected_message] :
-       std::array {
-         std::pair {create_file, "Unable to write test state:"},
-         std::pair {partial_write, "Unable to persist test state:"},
-         std::pair {flush, "Unable to persist test state:"},
-         std::pair {close, "Unable to close test state:"},
-       }) {
-    const auto result =
-      lvh::detail::test::broker_persistence_failure(failure);
-    EXPECT_FALSE(result.saved);
-    EXPECT_TRUE(result.message.starts_with(expected_message)) << result.message;
-  }
 }
 
 TEST_F(WindowsBrokerServiceTest, RestartsWithoutLosingTheServiceBoundary) {

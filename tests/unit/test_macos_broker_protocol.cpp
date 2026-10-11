@@ -4,13 +4,18 @@
  */
 
 #include "platform/macos/broker/io.hpp"
+#include "platform/macos/broker/license_response.hpp"
 #include "platform/macos/macos_xbox_transport.hpp"
 
 #include <array>
 #include <bitset>
+#include <cstdint>
 #include <gtest/gtest.h>
+#include <libvirtualhid/license.hpp>
 #include <libvirtualhid/profiles.hpp>
 #include <libvirtualhid/report.hpp>
+#include <limits>
+#include <string_view>
 #include <sys/socket.h>
 #include <thread>
 #include <unistd.h>
@@ -34,6 +39,25 @@ TEST(MacosBrokerProtocolTest, BuiltInProfilesFitBrokerTransport) {
     EXPECT_LE(transport.report_descriptor.size(), lvh::detail::macos_broker::max_descriptor_size);
     EXPECT_LE(transport.input_report_size, lvh::detail::macos_broker::max_report_size);
     EXPECT_LE(transport.output_report_size, lvh::detail::macos_broker::max_report_size);
+  }
+}
+
+TEST(MacosBrokerProtocolTest, AnswersLicensingMessagesWithUnrestrictedStatus) {
+  using lvh::detail::macos_broker::MessageType;
+
+  for (const auto active_devices : {0U, 3U, std::numeric_limits<std::uint32_t>::max()}) {
+    SCOPED_TRACE(active_devices);
+    const auto response = lvh::detail::macos_broker::license_response(active_devices);
+    EXPECT_EQ(response.version, lvh::detail::macos_broker::protocol_version);
+    EXPECT_EQ(response.type, MessageType::response);
+    EXPECT_EQ(response.status, 0);
+    EXPECT_EQ(response.active_devices, active_devices);
+    EXPECT_EQ(response.activation_limit, std::numeric_limits<std::uint32_t>::max());
+    EXPECT_EQ(response.activation_usage, 1U);
+    EXPECT_EQ(response.license_state, static_cast<std::uint32_t>(lvh::LicenseState::licensed));
+    EXPECT_EQ(std::string_view {response.plan_name.data()}, "Unrestricted");
+    EXPECT_EQ(std::string_view {response.message.data()}, "Activated");
+    EXPECT_EQ(response.customer_email.front(), '\0');
   }
 }
 

@@ -36,7 +36,8 @@ function(libvirtualhid_add_library target_name)
       "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/core/profiles.cpp"
       "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/core/report.cpp"
       "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/core/runtime.cpp"
-      "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/core/types.cpp")
+      "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/core/types.cpp"
+      "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/platform/license_unavailable.cpp")
 
     if(LIBVIRTUALHID_USES_THREADS)
         find_package(Threads REQUIRED)
@@ -78,8 +79,7 @@ function(libvirtualhid_add_library target_name)
           PRIVATE
           "${PROJECT_SOURCE_DIR}/third-party/lizardbyte-common/src/common/env.cpp"
           "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/platform/windows/windows_backend.cpp"
-          "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/platform/windows/windows_broker_client.cpp"
-          "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/platform/windows/windows_license.cpp")
+          "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/platform/windows/windows_broker_client.cpp")
         target_include_directories(${target_name}
           PRIVATE
           "${PROJECT_SOURCE_DIR}/third-party/lizardbyte-common/src/include"
@@ -107,14 +107,7 @@ function(libvirtualhid_add_library target_name)
     else()
         target_sources(${target_name}
           PRIVATE
-          "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/platform/license_unavailable.cpp"
           "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/platform/unsupported_backend.cpp")
-    endif()
-
-    if(LIBVIRTUALHID_USES_THREADS)
-        target_sources(${target_name}
-          PRIVATE
-          "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/platform/license_unavailable.cpp")
     endif()
 
     target_include_directories(${target_name}

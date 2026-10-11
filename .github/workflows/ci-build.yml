@@ -381,21 +381,6 @@ jobs:
             throw "Windows driver installer exited with code $($process.ExitCode)."
           }
 
-      - name: Enable GitHub Actions evaluation window
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $serviceName = "libvirtualhid_broker"
-          $serviceRegistryPath = "HKLM:\SYSTEM\CurrentControlSet\Services\$serviceName"
-          New-ItemProperty `
-            -LiteralPath $serviceRegistryPath `
-            -Name Environment `
-            -PropertyType MultiString `
-            -Value @("GITHUB_ACTIONS=true") `
-            -Force | Out-Null
-          Restart-Service -Name $serviceName -Force
-          (Get-Service -Name $serviceName).WaitForStatus("Running", [TimeSpan]::FromSeconds(15))
-
       - name: Verify Windows test driver package
         if: runner.os == 'Windows'
         shell: pwsh

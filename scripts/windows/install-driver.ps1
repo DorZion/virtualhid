@@ -207,7 +207,7 @@ function Install-LibVirtualHidBrokerService {
     Invoke-CheckedCommand -FilePath "sc.exe" -Arguments @(
       "description",
       $script:LibVirtualHidBrokerServiceName,
-      "Authorizes libvirtualhid virtual gamepad creation and license state."
+      "Manages libvirtualhid virtual gamepad devices."
     )
   }
 

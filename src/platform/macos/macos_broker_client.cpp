@@ -1,13 +1,12 @@
 /**
  * @file src/platform/macos/macos_broker_client.cpp
- * @brief Client side of the licensed macOS virtual HID broker.
+ * @brief Client side of the macOS virtual HID broker.
  */
 
 #include "platform/macos/macos_broker_client.hpp"
 
 #include "platform/macos/broker/io.hpp"
 #include "platform/macos/macos_xbox_transport.hpp"
-#include "platform/shared/lvh_broker_license_policy.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -15,7 +14,6 @@
 #include <cstring>
 #include <deque>
 #include <format>
-#include <libvirtualhid/license.hpp>
 #include <libvirtualhid/report.hpp>
 #include <mutex>
 #include <string>
@@ -234,39 +232,6 @@ namespace lvh::detail {
       bool disconnected_ = false;
     };
 
-    LicenseResult license_call(macos_broker::Message request) {
-      LicenseResult result;
-      result.license.purchase_url = broker_license::buy_url;
-      result.license.manage_account_url = broker_license::manage_account_url;
-      std::string error;
-      const int fd = macos_broker::connect_to_broker(error);
-      if (fd < 0) {
-        result.status = OperationStatus::failure(ErrorCode::backend_unavailable, error);
-        result.license.message = error;
-        return result;
-      }
-      macos_broker::Message response;
-      const bool exchanged = macos_broker::send_message(fd, request) && macos_broker::receive_message(fd, response);
-      ::close(fd);
-      if (!exchanged) {
-        result.status = OperationStatus::failure(ErrorCode::backend_unavailable, "macOS broker did not answer");
-        result.license.message = result.status.message();
-        return result;
-      }
-      result.status = response_status(response);
-      result.license.service_available = true;
-      result.license.state = response.license_state <= static_cast<std::uint32_t>(std::to_underlying(LicenseState::invalid)) ?
-                               static_cast<LicenseState>(response.license_state) :
-                               LicenseState::invalid;
-      result.license.active_devices = response.active_devices;
-      result.license.activation_limit = response.activation_limit;
-      result.license.activation_usage = response.activation_usage;
-      result.license.plan_name = response.plan_name.data();
-      result.license.customer_email = response.customer_email.data();
-      result.license.message = message_text(response);
-      return result;
-    }
-
   }  // namespace
 
   BackendGamepadCreationResult create_macos_brokered_gamepad(DeviceId id, const CreateGamepadOptions &options) {
@@ -316,31 +281,3 @@ namespace lvh::detail {
   }
 
 }  // namespace lvh::detail
-
-namespace lvh {
-
-  LicenseResult get_license_status() {
-    return detail::license_call({.type = detail::macos_broker::MessageType::status});
-  }
-
-  LicenseResult activate_license(std::string_view license_key, std::string_view instance_name) {
-    detail::macos_broker::Message request;
-    request.type = detail::macos_broker::MessageType::activate;
-    if (license_key.empty() || !detail::copy_text(request.license_key, license_key) || !detail::copy_text(request.instance_name, instance_name)) {
-      LicenseResult result;
-      result.status = OperationStatus::failure(ErrorCode::invalid_argument, "invalid macOS license key or instance name");
-      result.license.message = result.status.message();
-      return result;
-    }
-    return detail::license_call(request);
-  }
-
-  LicenseResult validate_license() {
-    return detail::license_call({.type = detail::macos_broker::MessageType::validate});
-  }
-
-  LicenseResult deactivate_license() {
-    return detail::license_call({.type = detail::macos_broker::MessageType::deactivate});
-  }
-
-}  // namespace lvh
