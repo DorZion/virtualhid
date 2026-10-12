@@ -644,7 +644,9 @@ namespace lvh::reports {
       static const auto start = std::chrono::steady_clock::now();
       const auto elapsed =
         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count();
-      return static_cast<std::uint16_t>((static_cast<std::uint64_t>(elapsed) * 3U) / 16U);
+      const auto timestamp = static_cast<std::uint16_t>((static_cast<std::uint64_t>(elapsed) * 3U) / 16U);
+      // Special K's XInput HID wrapper discards DualShock 4 reports whose timestamp is zero.
+      return std::max<std::uint16_t>(timestamp, 1U);
     }
 
     std::uint8_t dualsense_sequence_number() {

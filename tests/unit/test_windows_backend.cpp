@@ -118,6 +118,27 @@ TEST_F(WindowsBackendTest, SwitchReportsStreamAtTheNativeCadence) {
   }));
 }
 
+TEST_F(WindowsBackendTest, PlayStationReportsStreamHeldStateWithFreshTimestamps) {
+  for (const auto kind : {lvh::GamepadProfileKind::dualshock4, lvh::GamepadProfileKind::dualsense}) {
+    SCOPED_TRACE(static_cast<int>(kind));
+    const auto result = lvh::detail::test::windows_backend_playstation_report_stream(kind);
+
+    expect_ok(result.create_status);
+    expect_ok(result.submit_status);
+    ASSERT_TRUE(result.repeated_report);
+    expect_ok(result.close_status);
+    ASSERT_GE(result.submitted_reports.size(), 3U);
+    EXPECT_EQ(result.submitted_reports.front(), result.expected_report);
+    // The D-pad hat byte differs by USB layout; repeats must keep the held state.
+    const auto hat_offset = kind == lvh::GamepadProfileKind::dualsense ? 8U : 5U;
+    EXPECT_TRUE(std::ranges::all_of(result.submitted_reports, [&result, hat_offset](const auto &report) {
+      return report.size() == result.expected_report.size() && report[0] == result.expected_report[0] &&
+             report[hat_offset] == result.expected_report[hat_offset];
+    }));
+    EXPECT_NE(result.submitted_reports.back(), result.expected_report);
+  }
+}
+
 TEST_F(WindowsBackendTest, XboxReportsOnlySubmitShoulderStateTransitions) {
   for (const auto kind : {lvh::GamepadProfileKind::xbox_one, lvh::GamepadProfileKind::xbox_series}) {
     SCOPED_TRACE(static_cast<int>(kind));

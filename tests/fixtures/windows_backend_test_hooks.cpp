@@ -574,6 +574,30 @@ namespace lvh::detail {
       return result;
     }
 
+    WindowsSwitchReportStreamResult windows_backend_playstation_report_stream(GamepadProfileKind kind) {
+      WindowsSwitchReportStreamResult result;
+      auto command_state = std::make_shared<FakeWindowsControlChannelState>();
+      auto backend = make_fake_windows_backend(command_state, std::make_shared<FakeWindowsControlChannelState>());
+
+      CreateGamepadOptions options;
+      options.profile = kind == GamepadProfileKind::dualsense ? profiles::dualsense_usb() : profiles::dualshock4_usb();
+      auto created = backend->create_gamepad(10, options);
+      result.create_status = created.status;
+      if (created) {
+        GamepadState state;
+        state.buttons.set(GamepadButton::dpad_up);
+        result.expected_report = reports::pack_input_report(options.profile, state);
+        result.submit_status = created.gamepad->submit(state, result.expected_report);
+        result.repeated_report = wait_until([&command_state] {
+          return command_state->submit_report_count() >= 3U;
+        });
+        result.close_status = created.gamepad->close();
+        result.submitted_reports = command_state->submit_reports();
+      }
+
+      return result;
+    }
+
     WindowsXboxInputDeduplicationResult windows_backend_xbox_input_deduplication(GamepadProfileKind kind) {
       WindowsXboxInputDeduplicationResult result;
       auto command_state = std::make_shared<FakeWindowsControlChannelState>();

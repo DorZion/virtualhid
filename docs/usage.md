@@ -126,7 +126,8 @@ fixed for the mouse's lifetime; recreate the mouse when that geometry changes.
 platform they return immediately with a successful, licensed result: plan
 `Unrestricted`, message `Activated`, `service_available` set, an activation
 limit of `UINT32_MAX`, and usage `1`. They do not contact a broker or the
-network, ignore any key or machine name, and report `active_devices` as `0`.
+network, ignore any key or machine name, and report `active_devices` as `0`
+(untracked, not proof that no devices exist).
 Deactivation does not release anything. Do not use `service_available` to
 detect a running broker; device creation reports real backend failures.
 Applications that link `libvirtualhid` statically must rebuild or relink to

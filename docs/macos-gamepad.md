@@ -28,7 +28,8 @@ runs as a LaunchDaemon.
 The `/usr/local/bin/libvirtualhid-license` command remains for scripts. Its
 `status`, `activate [machine-name]`, `validate`, and `deactivate` commands no
 longer prompt for a key, always report `Activated` with plan `Unrestricted`,
-and exit with status 0. Upgrade the installed broker as well as applications:
+and exit with status 0. `Active gamepads: 0` means the count is not tracked,
+not that no gamepads exist. Upgrade the installed broker as well as applications:
 an older broker still enforces its previous license checks.
 
 ## Troubleshoot

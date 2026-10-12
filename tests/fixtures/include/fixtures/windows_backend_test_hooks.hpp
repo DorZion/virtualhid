@@ -268,6 +268,7 @@ namespace lvh::detail::test {
 
   WindowsBackendLifecycleResult windows_backend_fake_channel_lifecycle();
   WindowsSwitchReportStreamResult windows_backend_switch_report_stream();
+  WindowsSwitchReportStreamResult windows_backend_playstation_report_stream(GamepadProfileKind kind);
   WindowsXboxInputDeduplicationResult windows_backend_xbox_input_deduplication(GamepadProfileKind kind);
   WindowsPlayStationTransportResult windows_backend_playstation_transport();
   WindowsGenericPidOrderingResult windows_backend_generic_pid_callback_ordering();

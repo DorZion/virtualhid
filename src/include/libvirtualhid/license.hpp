@@ -35,7 +35,7 @@ namespace lvh {
   struct LicenseStatus {
     bool service_available = false;  ///< Always `true` in results from current releases; does not indicate a running broker.
     LicenseState state = LicenseState::unavailable;  ///< Always `LicenseState::licensed` in current results.
-    std::uint32_t active_devices = 0;  ///< Always `0` from the public API; brokers may report their device count to older clients.
+    std::uint32_t active_devices = 0;  ///< Always `0` from the public API, meaning untracked, not that no devices exist.
     std::uint32_t activation_limit = 0;  ///< Always `UINT32_MAX` in current results.
     std::uint32_t activation_usage = 0;  ///< Always `1` in current results.
     std::string plan_name;  ///< Always `Unrestricted` in current results.
