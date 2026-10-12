@@ -318,6 +318,34 @@ TEST(WindowsProtocolTest, UsesUsbFramingForPlayStationProfilesOnVhf) {
   }
 }
 
+TEST(WindowsProtocolTest, PreservedPlayStationBluetoothProfilesAlsoDeclareUsbOutput) {
+  struct Case {
+    lvh::DeviceProfile requested;
+    std::vector<std::uint8_t> usb_output;
+  };
+
+  const std::array cases {
+    Case {lvh::profiles::dualshock4(), {0x75, 0x08, 0x95, 0x1F, 0x85, 0x05, 0x09, 0x22, 0x91, 0x02}},
+    Case {lvh::profiles::dualsense(), {0x75, 0x08, 0x95, 0x2F, 0x85, 0x02, 0x09, 0x23, 0x91, 0x02}},
+  };
+
+  for (const auto &[requested, usb_output] : cases) {
+    SCOPED_TRACE(requested.name);
+    const auto effective = lvh::detail::windows::effective_vhf_gamepad_profile(requested, true);
+
+    EXPECT_EQ(effective.bus_type, lvh::BusType::bluetooth);
+    EXPECT_EQ(effective.report_id, requested.report_id);
+    EXPECT_EQ(effective.input_report_size, requested.input_report_size);
+    EXPECT_EQ(effective.output_report_size, requested.output_report_size);
+
+    const auto &descriptor = effective.report_descriptor;
+    ASSERT_EQ(descriptor.size(), requested.report_descriptor.size() + 18U);
+    EXPECT_TRUE(std::equal(requested.report_descriptor.begin(), std::prev(requested.report_descriptor.end()), descriptor.begin()));
+    EXPECT_FALSE(std::ranges::search(descriptor, usb_output).empty());
+    EXPECT_EQ(descriptor.back(), 0xC0U);
+  }
+}
+
 TEST(WindowsProtocolTest, PacksGenericUnknownBusGamepadCreateRequestWithoutOptionalFlags) {
   lvh::CreateGamepadOptions options;
   options.profile = minimal_gamepad_profile();

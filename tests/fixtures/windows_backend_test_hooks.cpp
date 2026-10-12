@@ -811,13 +811,14 @@ namespace lvh::detail {
       return result;
     }
 
-    WindowsPlayStationTransportResult windows_backend_playstation_transport() {
+    WindowsPlayStationTransportResult windows_backend_playstation_transport(bool preserve_bus_type) {
       WindowsPlayStationTransportResult result;
       auto command_state = std::make_shared<FakeWindowsControlChannelState>();
       auto event_state = std::make_shared<FakeWindowsControlChannelState>();
       auto backend = make_fake_windows_backend(command_state, event_state);
 
       CreateGamepadOptions options;
+      options.preserve_bus_type = preserve_bus_type;
       options.profile = profiles::dualshock4();
       auto dualshock4 = backend->create_gamepad(40, options);
       result.dualshock4_status = dualshock4.status;

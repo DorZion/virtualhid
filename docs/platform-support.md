@@ -24,7 +24,10 @@ profiles use virtual HID. Battery values submitted for Xbox One and Series
 can be read through HID, but XInput and applications relying on its battery
 API do not receive the remote value. Steam may hide battery indicators for
 wired virtual devices. Windows PlayStation devices use USB report framing,
-even when the public profile requested Bluetooth.
+even when the public profile requested Bluetooth. Set
+`CreateGamepadOptions::preserve_bus_type` to keep Bluetooth framing, for
+example when a game picks USB-only DualSense audio haptics that the virtual
+device cannot play.
 
 The published installer targets Windows 11 version 21H2 or later on AMD64.
 Windows 10 version 2004 or later has a best-effort path. Windows ARM64 release

@@ -443,6 +443,18 @@ namespace lvh {
      * @brief Consumer metadata associated with the device.
      */
     GamepadMetadata metadata;
+
+    /**
+     * @brief Keep the requested profile transport when the backend would otherwise substitute one.
+     *
+     * Windows normally presents Bluetooth PlayStation profiles with USB report
+     * framing because its virtual HID stack cannot advertise Bluetooth to
+     * HIDAPI consumers. Set this to keep the Bluetooth reports instead, for
+     * example so games do not expect USB-only DualSense audio haptics. The
+     * Windows device still accepts USB-framed output reports so HIDAPI
+     * consumers keep rumble and lighting. Other backends ignore this flag.
+     */
+    bool preserve_bus_type = false;
   };
 
   /**

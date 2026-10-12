@@ -3158,7 +3158,7 @@ namespace lvh::detail {
         }
 
         auto effective_options = options;
-        effective_options.profile = windows::effective_vhf_gamepad_profile(options.profile);
+        effective_options.profile = windows::effective_vhf_gamepad_profile(options.profile, options.preserve_bus_type);
         auto result = context_->create_gamepad(id, effective_options);
         if (result) {
           result.effective_profile = std::move(effective_options.profile);

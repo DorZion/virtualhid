@@ -176,6 +176,18 @@ TEST_F(WindowsBackendTest, PlayStationDefaultsUseEffectiveUsbProfiles) {
   EXPECT_EQ(result.dualsense_effective_profile.output_report_size, dualsense_usb.output_report_size);
 }
 
+TEST_F(WindowsBackendTest, PlayStationPreservedBusTypeKeepsBluetoothProfiles) {
+  const auto result = lvh::detail::test::windows_backend_playstation_transport(true);
+
+  ASSERT_TRUE(result.dualshock4_status.ok()) << result.dualshock4_status.message();
+  EXPECT_EQ(result.dualshock4_effective_profile.bus_type, lvh::BusType::bluetooth);
+  EXPECT_EQ(result.dualshock4_effective_profile.input_report_size, lvh::profiles::dualshock4().input_report_size);
+
+  ASSERT_TRUE(result.dualsense_status.ok()) << result.dualsense_status.message();
+  EXPECT_EQ(result.dualsense_effective_profile.bus_type, lvh::BusType::bluetooth);
+  EXPECT_EQ(result.dualsense_effective_profile.input_report_size, lvh::profiles::dualsense().input_report_size);
+}
+
 TEST_F(WindowsBackendTest, HidMousePreservesIdentityChunksInputAndUsesNarrowFallback) {
   const auto result = lvh::detail::test::windows_backend_hid_mouse();
 

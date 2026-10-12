@@ -510,6 +510,22 @@ TEST(ReportTest, KeepsMalformedPidRumbleReportRaw) {
   EXPECT_EQ(outputs[0].raw_report, report);
 }
 
+TEST(ReportTest, ParsesUsbFramedDualSenseOutputOnBluetoothProfile) {
+  const auto profile = lvh::profiles::dualsense();
+  std::vector<std::uint8_t> report(48, 0);
+  report[0] = 0x02;
+  report[1] = 0x01;
+  report[3] = 0x80;
+  report[4] = 0x40;
+
+  const auto outputs = lvh::reports::parse_output_reports(profile, report);
+
+  ASSERT_EQ(outputs.size(), 1U);
+  EXPECT_EQ(outputs[0].kind, lvh::GamepadOutputKind::rumble);
+  EXPECT_GT(outputs[0].low_frequency_rumble, 0U);
+  EXPECT_GT(outputs[0].high_frequency_rumble, 0U);
+}
+
 TEST(ReportTest, ParsesDualSenseOutputReportEvents) {
   const auto profile = lvh::profiles::dualsense_usb();
   std::vector<std::uint8_t> report(profile.output_report_size, 0);
