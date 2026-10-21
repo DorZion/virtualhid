@@ -1,9 +1,7 @@
 # Microsoft Store review validation
 
 Use these steps for certification review of the Windows driver MSI. Reviewers
-do not need the Windows SDK/WDK or a consuming application. Supply an active
-review license key separately through Partner Center; do not embed it in the
-package or this document.
+do not need the Windows SDK/WDK, a consuming application, or a license key.
 
 ## Partner Center notes
 
@@ -15,8 +13,7 @@ Open PowerShell and run:
 $installRoot = Join-Path $env:ProgramFiles "libvirtualhid"
 Start-Process "$installRoot\tools\windows\virtualhid_control.exe"
 
-In Virtual HID Control, paste the supplied review key and click Activate
-license. Confirm the status is Licensed. Leave Xbox Series selected and click
+In Virtual HID Control, leave Xbox Series selected and click
 Create. Use the UI to press buttons and move axes. Then select Mouse, click
 Create, and use Tab or the arrow keys to highlight a mouse control. Press
 Space or Enter to test movement, buttons, and scrolling.
@@ -31,8 +28,8 @@ browser should detect the controller and show changing input values.
 ```
 
 If the MSI was installed elsewhere, replace `$env:ProgramFiles\libvirtualhid`
-with the chosen installation directory. The installed UI can manage the
-machine license and exercise devices without administrator privileges.
+with the chosen installation directory. The installed UI can exercise devices
+without administrator privileges.
 
 ## Release scope and diagnostics
 

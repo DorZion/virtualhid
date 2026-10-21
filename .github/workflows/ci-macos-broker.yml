@@ -75,18 +75,18 @@ jobs:
       - name: Test broker policy and protocol
         run: |
           cmake-build-macos-universal/tests/test_libvirtualhid \
-            '--gtest_filter=BrokerLicensePolicyTest.*:GitHubActionsEvaluationTest.*:MacosBrokerProtocolTest.*'
+            '--gtest_filter=License*:MacosBrokerProtocolTest.*'
 
-      - name: Smoke test broker and license IPC
+      - name: Smoke test broker startup and license commands
         run: |
           broker=cmake-build-macos-universal/src/platform/macos/broker/VirtualHIDBroker.app/Contents/MacOS/VirtualHIDBroker
           license_cli=cmake-build-macos-universal/src/platform/macos/broker/libvirtualhid-license
-          sudo -n env GITHUB_ACTIONS=true "${broker}" &
+          sudo -n "${broker}" &
           broker_pid=$!
           trap 'sudo -n kill "${broker_pid}" 2>/dev/null || true' EXIT
           ready=false
           for (( attempt = 0; attempt < 20; ++attempt )); do
-            if status_output="$("${license_cli}" status 2>&1)"; then
+            if [[ -S /var/run/libvirtualhid/broker.sock ]]; then
               ready=true
               break
             fi
@@ -96,11 +96,11 @@ jobs:
             echo 'Broker did not become ready' >&2
             exit 1
           fi
-          grep -F 'Plan: GitHub Actions Evaluation' <<< "${status_output}"
-          if "${license_cli}" validate >/dev/null 2>&1; then
-            echo 'Unlicensed validation unexpectedly succeeded' >&2
-            exit 1
-          fi
+          for command in status activate validate deactivate; do
+            output="$("${license_cli}" "${command}" </dev/null)"
+            grep -F 'Activated' <<< "${output}"
+            grep -F 'Plan: Unrestricted' <<< "${output}"
+          done
 
       - name: Import Developer ID certificate
         if: inputs.publish_release == 'true'

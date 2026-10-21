@@ -39,18 +39,6 @@ namespace lvh::windows::broker_validation {
   }
 
   template<std::size_t Size>
-  bool valid_c_string(const std::array<char, Size> &value, bool allow_empty = true) {
-    const auto terminator = std::ranges::find(value, '\0');
-    if (terminator == std::end(value) || (!allow_empty && terminator == std::begin(value))) {
-      return false;
-    }
-
-    return std::ranges::all_of(std::next(terminator), std::end(value), [](const auto character) {
-      return character == '\0';
-    });
-  }
-
-  template<std::size_t Size>
   bool valid_sized_c_string(const std::array<char, Size> &value, std::uint32_t size) {
     if (size >= Size || value[size] != '\0') {
       return false;
@@ -186,11 +174,10 @@ namespace lvh::windows::broker_validation {
 
     switch (expected_type) {
       case activate_license:
-        return valid_c_string(request.license_key, false) &&
-               valid_c_string(request.instance_name);
       case validate_license:
       case deactivate_license:
-        return all_zero(request.license_key) && all_zero(request.instance_name);
+        // License payloads are unused compatibility bytes and never cause a rejection.
+        return true;
       case status:
       case create_device:
       case destroy_device:

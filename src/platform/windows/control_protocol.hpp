@@ -117,21 +117,73 @@ namespace lvh::detail::windows {
     return LVH_WINDOWS_GAMEPAD_GENERIC;
   }
 
-  inline DeviceProfile effective_vhf_gamepad_profile(const DeviceProfile &requested_profile) {
+  /**
+   * @brief Resolve the profile presented through the Windows Virtual HID Framework.
+   *
+   * VHF cannot advertise Bluetooth to HIDAPI consumers, so they send USB-framed
+   * output reports. Bluetooth PlayStation profiles therefore switch to USB
+   * framing, or keep Bluetooth framing with the USB output report added when
+   * @p preserve_bus_type is set.
+   *
+   * @param requested_profile Profile requested by the consumer.
+   * @param preserve_bus_type Whether to keep the requested Bluetooth framing.
+   * @return Profile used to create the VHF device.
+   */
+  inline DeviceProfile effective_vhf_gamepad_profile(const DeviceProfile &requested_profile, bool preserve_bus_type = false) {
     if (requested_profile.bus_type != BusType::bluetooth) {
       return requested_profile;
     }
 
     auto usb_profile = DeviceProfile {};
+    auto usb_output_usage = std::uint8_t {};
+    auto usb_output_report_id = std::uint8_t {};
     switch (requested_profile.gamepad_kind) {
       case GamepadProfileKind::dualshock4:
         usb_profile = profiles::dualshock4_usb();
+        usb_output_usage = 0x22U;
+        usb_output_report_id = 0x05U;
         break;
       case GamepadProfileKind::dualsense:
         usb_profile = profiles::dualsense_usb();
+        usb_output_usage = 0x23U;
+        usb_output_report_id = 0x02U;
         break;
       default:
         return requested_profile;
+    }
+
+    if (preserve_bus_type) {
+      auto effective_profile = requested_profile;
+      auto &descriptor = effective_profile.report_descriptor;
+      if (descriptor.empty() || descriptor.back() != 0xC0U) {
+        return effective_profile;
+      }
+
+      // Vendor output report matching the USB layout, inserted before the closing End Collection.
+      descriptor.insert(
+        std::prev(descriptor.end()),
+        {
+          0x06,
+          0x00,
+          0xFF,
+          0x15,
+          0x00,
+          0x26,
+          0xFF,
+          0x00,
+          0x75,
+          0x08,
+          0x95,
+          static_cast<std::uint8_t>(usb_profile.output_report_size - 1U),
+          0x85,
+          usb_output_report_id,
+          0x09,
+          usb_output_usage,
+          0x91,
+          0x02,
+        }
+      );
+      return effective_profile;
     }
 
     auto effective_profile = requested_profile;

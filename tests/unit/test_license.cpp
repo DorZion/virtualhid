@@ -6,14 +6,17 @@
 // test includes
 #include <gtest/gtest.h>
 
-// local includes
-#include "platform/shared/lvh_broker_license_policy.hpp"
-
 // lib includes
 #include <libvirtualhid/license.hpp>
 
 // standard includes
-#include <chrono>
+#include <atomic>
+#include <cstdint>
+#include <limits>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <vector>
 
 #if defined(_WIN32)
   // local includes
@@ -31,83 +34,93 @@ TEST(LicenseStatusTest, LicensedReflectsCurrentState) {
   EXPECT_FALSE(status.licensed());
 }
 
-TEST(BrokerLicensePolicyTest, AcceptsOnlyConfiguredBenefits) {
-  const auto *yearly = lvh::broker_license::benefit(lvh::broker_license::allowed_benefits[0].id);
-  const auto *lifetime = lvh::broker_license::benefit(lvh::broker_license::allowed_benefits[1].id);
-  ASSERT_NE(yearly, nullptr);
-  ASSERT_NE(lifetime, nullptr);
-  EXPECT_TRUE(yearly->subscription_backed);
-  EXPECT_FALSE(lifetime->subscription_backed);
-  EXPECT_EQ(lvh::broker_license::plan_name(yearly->id), "Yearly");
-  EXPECT_EQ(lvh::broker_license::plan_name(lifetime->id), "Lifetime");
-  EXPECT_EQ(lvh::broker_license::benefit("unrecognized-benefit"), nullptr);
+namespace {
+
+  void expect_activated(const lvh::LicenseResult &result) {
+    EXPECT_TRUE(result);
+    EXPECT_TRUE(result.status.ok());
+    EXPECT_EQ(result.status.code(), lvh::ErrorCode::ok);
+    EXPECT_TRUE(result.status.message().empty());
+    EXPECT_TRUE(result.license.service_available);
+    EXPECT_EQ(result.license.state, lvh::LicenseState::licensed);
+    EXPECT_TRUE(result.license.licensed());
+    EXPECT_EQ(result.license.active_devices, 0U);
+    EXPECT_EQ(result.license.activation_limit, std::numeric_limits<std::uint32_t>::max());
+    EXPECT_EQ(result.license.activation_usage, 1U);
+    EXPECT_EQ(result.license.plan_name, "Unrestricted");
+    EXPECT_TRUE(result.license.customer_email.empty());
+    EXPECT_EQ(result.license.message, "Activated");
+    EXPECT_TRUE(result.license.purchase_url.empty());
+    EXPECT_TRUE(result.license.manage_account_url.empty());
+  }
+
+}  // namespace
+
+TEST(LicenseStatusTest, DefaultConstructionIsUnchanged) {
+  const lvh::LicenseResult result;
+  EXPECT_FALSE(result.license.service_available);
+  EXPECT_EQ(result.license.state, lvh::LicenseState::unavailable);
+  EXPECT_EQ(result.license.activation_limit, 0U);
+  EXPECT_EQ(result.license.activation_usage, 0U);
+  EXPECT_TRUE(result.license.message.empty());
 }
 
-TEST(BrokerLicensePolicyTest, EnforcesSubscriptionAndOutageBoundaries) {
-  using namespace std::chrono_literals;
-  constexpr auto start = 1000U;
-  constexpr auto max_age = std::chrono::duration_cast<std::chrono::seconds>(lvh::broker_license::subscription_max_age).count();
-  EXPECT_TRUE(lvh::broker_license::subscription_current(start, start));
-  EXPECT_TRUE(lvh::broker_license::subscription_current(start, start + max_age - 1));
-  EXPECT_FALSE(lvh::broker_license::subscription_current(start, start + max_age));
-  EXPECT_FALSE(lvh::broker_license::subscription_current(start, start - 1));
-  EXPECT_FALSE(lvh::broker_license::subscription_current(0, start));
-  EXPECT_FALSE(lvh::broker_license::outage_retention_elapsed(1h - 1ms));
-  EXPECT_TRUE(lvh::broker_license::outage_retention_elapsed(1h));
+TEST(LicenseStatusTest, PreservesEnumValues) {
+  EXPECT_EQ(static_cast<int>(lvh::LicenseState::unavailable), 0);
+  EXPECT_EQ(static_cast<int>(lvh::LicenseState::unlicensed), 1);
+  EXPECT_EQ(static_cast<int>(lvh::LicenseState::licensed), 2);
+  EXPECT_EQ(static_cast<int>(lvh::LicenseState::expired), 3);
+  EXPECT_EQ(static_cast<int>(lvh::LicenseState::disabled), 4);
+  EXPECT_EQ(static_cast<int>(lvh::LicenseState::invalid), 5);
 }
 
-TEST(BrokerLicensePolicyTest, RetainsOneDeviceAfterAnOutage) {
-  lvh::broker_license::OutageDeviceSelector selector;
-
-  EXPECT_TRUE(selector.keep(1));
-  EXPECT_TRUE(selector.keep(1));
-  EXPECT_FALSE(selector.keep(2));
-  selector.remove(2);
-  EXPECT_FALSE(selector.keep(2));
-
-  selector.remove(1);
-  EXPECT_TRUE(selector.keep(2));
-  selector.reset();
-  EXPECT_TRUE(selector.keep(3));
-  EXPECT_FALSE(selector.keep(2));
+TEST(LicenseApiTest, EveryOperationReportsActivatedWithoutABroker) {
+  expect_activated(lvh::get_license_status());
+  expect_activated(lvh::activate_license("test-key"));
+  expect_activated(lvh::activate_license("test-key", "machine"));
+  expect_activated(lvh::validate_license());
+  expect_activated(lvh::deactivate_license());
 }
 
-TEST(GitHubActionsEvaluationTest, IsActiveOnlyInsideFiveMinuteWindow) {
-  using namespace std::chrono_literals;
-  using lvh::broker_license::github_actions_evaluation::active;
-
-  const auto started_at = lvh::broker_license::github_actions_evaluation::Clock::time_point {1000s};
-  EXPECT_TRUE(active(started_at, started_at));
-  EXPECT_TRUE(active(started_at, started_at + 5min - 1s));
-  EXPECT_FALSE(active(started_at, started_at + 5min));
-  EXPECT_FALSE(active(started_at, started_at - 1s));
+TEST(LicenseApiTest, AcceptsAnyLicenseKeyAndInstanceName) {
+  using namespace std::string_view_literals;
+  const std::string oversized(1U << 20U, 'k');
+  const std::string arbitrary_bytes {'\xff', '\x00', '\x80', '\x01'};
+  for (const auto key : {""sv, "   \t\n"sv, "in\0valid"sv, std::string_view {oversized}, std::string_view {arbitrary_bytes}}) {
+    expect_activated(lvh::activate_license(key));
+    expect_activated(lvh::activate_license(key, key));
+  }
 }
 
-TEST(GitHubActionsEvaluationTest, RemainingTimeClampsAtWindowBoundaries) {
-  using namespace std::chrono_literals;
-  using lvh::broker_license::github_actions_evaluation::remaining;
-
-  const auto started_at = lvh::broker_license::github_actions_evaluation::Clock::time_point {1000s};
-  EXPECT_EQ(remaining(started_at, started_at), 5min);
-  EXPECT_EQ(remaining(started_at, started_at + 4min), 1min);
-  EXPECT_EQ(remaining(started_at, started_at + 5min - 500ms), 1s);
-  EXPECT_EQ(remaining(started_at, started_at + 5min), 0s);
-  EXPECT_EQ(remaining(started_at, started_at - 1s), 0s);
+TEST(LicenseApiTest, DeactivationLeavesTheEffectiveStateActivated) {
+  for (int i = 0; i < 3; ++i) {
+    expect_activated(lvh::activate_license("key"));
+    expect_activated(lvh::deactivate_license());
+    expect_activated(lvh::get_license_status());
+    expect_activated(lvh::validate_license());
+  }
 }
 
-#if !defined(_WIN32) && !defined(__APPLE__)
-TEST(LicenseApiTest, UnsupportedPlatformReturnsExplicitFailure) {
-  const auto queried = lvh::get_license_status();
-  EXPECT_FALSE(queried);
-  EXPECT_EQ(queried.status.code(), lvh::ErrorCode::backend_unavailable);
-  EXPECT_EQ(queried.license.state, lvh::LicenseState::unavailable);
-  EXPECT_FALSE(queried.license.service_available);
-
-  EXPECT_FALSE(lvh::activate_license("test-key"));
-  EXPECT_FALSE(lvh::validate_license());
-  EXPECT_FALSE(lvh::deactivate_license());
+TEST(LicenseApiTest, ConcurrentCallersAllReportActivated) {
+  std::vector<std::thread> threads;
+  std::atomic<int> failures {0};
+  for (int i = 0; i < 8; ++i) {
+    threads.emplace_back([&failures] {
+      for (int j = 0; j < 100; ++j) {
+        const auto results = {lvh::get_license_status(), lvh::activate_license("key"), lvh::validate_license(), lvh::deactivate_license()};
+        for (const auto &result : results) {
+          if (!result || !result.license.licensed() || result.license.message != "Activated") {
+            ++failures;
+          }
+        }
+      }
+    });
+  }
+  for (auto &thread : threads) {
+    thread.join();
+  }
+  EXPECT_EQ(failures.load(), 0);
 }
-#endif
 
 #if defined(_WIN32)
 TEST(WindowsBrokerClientTest, BuildsVersionedRequestHeader) {

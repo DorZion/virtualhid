@@ -118,6 +118,27 @@ TEST_F(WindowsBackendTest, SwitchReportsStreamAtTheNativeCadence) {
   }));
 }
 
+TEST_F(WindowsBackendTest, PlayStationReportsStreamHeldStateWithFreshTimestamps) {
+  for (const auto kind : {lvh::GamepadProfileKind::dualshock4, lvh::GamepadProfileKind::dualsense}) {
+    SCOPED_TRACE(static_cast<int>(kind));
+    const auto result = lvh::detail::test::windows_backend_playstation_report_stream(kind);
+
+    expect_ok(result.create_status);
+    expect_ok(result.submit_status);
+    ASSERT_TRUE(result.repeated_report);
+    expect_ok(result.close_status);
+    ASSERT_GE(result.submitted_reports.size(), 3U);
+    EXPECT_EQ(result.submitted_reports.front(), result.expected_report);
+    // The D-pad hat byte differs by USB layout; repeats must keep the held state.
+    const auto hat_offset = kind == lvh::GamepadProfileKind::dualsense ? 8U : 5U;
+    EXPECT_TRUE(std::ranges::all_of(result.submitted_reports, [&result, hat_offset](const auto &report) {
+      return report.size() == result.expected_report.size() && report[0] == result.expected_report[0] &&
+             report[hat_offset] == result.expected_report[hat_offset];
+    }));
+    EXPECT_NE(result.submitted_reports.back(), result.expected_report);
+  }
+}
+
 TEST_F(WindowsBackendTest, XboxReportsOnlySubmitShoulderStateTransitions) {
   for (const auto kind : {lvh::GamepadProfileKind::xbox_one, lvh::GamepadProfileKind::xbox_series}) {
     SCOPED_TRACE(static_cast<int>(kind));
@@ -153,6 +174,18 @@ TEST_F(WindowsBackendTest, PlayStationDefaultsUseEffectiveUsbProfiles) {
   EXPECT_EQ(result.dualsense_effective_profile.report_descriptor, dualsense_usb.report_descriptor);
   EXPECT_EQ(result.dualsense_effective_profile.input_report_size, dualsense_usb.input_report_size);
   EXPECT_EQ(result.dualsense_effective_profile.output_report_size, dualsense_usb.output_report_size);
+}
+
+TEST_F(WindowsBackendTest, PlayStationPreservedBusTypeKeepsBluetoothProfiles) {
+  const auto result = lvh::detail::test::windows_backend_playstation_transport(true);
+
+  ASSERT_TRUE(result.dualshock4_status.ok()) << result.dualshock4_status.message();
+  EXPECT_EQ(result.dualshock4_effective_profile.bus_type, lvh::BusType::bluetooth);
+  EXPECT_EQ(result.dualshock4_effective_profile.input_report_size, lvh::profiles::dualshock4().input_report_size);
+
+  ASSERT_TRUE(result.dualsense_status.ok()) << result.dualsense_status.message();
+  EXPECT_EQ(result.dualsense_effective_profile.bus_type, lvh::BusType::bluetooth);
+  EXPECT_EQ(result.dualsense_effective_profile.input_report_size, lvh::profiles::dualsense().input_report_size);
 }
 
 TEST_F(WindowsBackendTest, HidMousePreservesIdentityChunksInputAndUsesNarrowFallback) {

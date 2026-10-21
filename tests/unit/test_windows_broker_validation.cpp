@@ -294,45 +294,30 @@ TEST(WindowsBrokerValidationTest, RejectsMalformedDestroyFields) {
   EXPECT_FALSE(lvh::windows::broker_validation::valid_request(request));
 }
 
-TEST(WindowsBrokerValidationTest, RequiresBoundedActivationStrings) {
-  const auto valid = valid_license_request(LvhWindowsBrokerRequestType::activate_license);
-  EXPECT_TRUE(lvh::windows::broker_validation::valid_request(valid, LvhWindowsBrokerRequestType::activate_license));
-
-  auto request = valid;
-  std::ranges::fill(request.license_key, 'x');
-  EXPECT_FALSE(lvh::windows::broker_validation::valid_request(request, LvhWindowsBrokerRequestType::activate_license));
-
-  request = valid;
-  std::ranges::fill(request.instance_name, 'x');
-  EXPECT_FALSE(lvh::windows::broker_validation::valid_request(request, LvhWindowsBrokerRequestType::activate_license));
-
-  request = valid;
-  std::ranges::fill(request.license_key, '\0');
-  EXPECT_FALSE(lvh::windows::broker_validation::valid_request(request, LvhWindowsBrokerRequestType::activate_license));
-
-  request = valid;
-  std::ranges::fill(request.instance_name, '\0');
-  EXPECT_TRUE(lvh::windows::broker_validation::valid_request(request, LvhWindowsBrokerRequestType::activate_license));
-
-  request = valid;
-  request.license_key[sizeof("test-key")] = 'x';
-  EXPECT_FALSE(lvh::windows::broker_validation::valid_request(request, LvhWindowsBrokerRequestType::activate_license));
-}
-
-TEST(WindowsBrokerValidationTest, RequiresEmptyValidationAndDeactivationPayloads) {
+TEST(WindowsBrokerValidationTest, AcceptsAnyLicensePayload) {
   for (const auto type : {
+         LvhWindowsBrokerRequestType::activate_license,
          LvhWindowsBrokerRequestType::validate_license,
          LvhWindowsBrokerRequestType::deactivate_license,
        }) {
-    auto request = valid_license_request(type);
+    const auto valid = valid_license_request(type);
+    EXPECT_TRUE(lvh::windows::broker_validation::valid_request(valid, type));
+
+    auto request = valid;
+    std::ranges::fill(request.license_key, '\0');
+    std::ranges::fill(request.instance_name, '\0');
     EXPECT_TRUE(lvh::windows::broker_validation::valid_request(request, type));
 
-    request.license_key[0] = 'x';
-    EXPECT_FALSE(lvh::windows::broker_validation::valid_request(request, type));
+    request = valid;
+    std::ranges::fill(request.license_key, 'x');
+    std::ranges::fill(request.instance_name, 'x');
+    EXPECT_TRUE(lvh::windows::broker_validation::valid_request(request, type));
 
-    request = valid_license_request(type);
-    request.instance_name[0] = 'x';
-    EXPECT_FALSE(lvh::windows::broker_validation::valid_request(request, type));
+    request = valid;
+    request.license_key[0] = 'x';
+    request.license_key[2] = 'y';
+    request.instance_name[0] = static_cast<char>(0xff);
+    EXPECT_TRUE(lvh::windows::broker_validation::valid_request(request, type));
   }
 }
 

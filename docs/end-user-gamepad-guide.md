@@ -58,8 +58,8 @@ that Moonlight client.
 
 Use the current Sunshine and Virtual HID Broker versions recommended by the
 Sunshine release you installed. On Windows, the Virtual HID Broker must be
-installed and have a valid machine license before Sunshine can create a
-driver-backed controller. After installing or updating the driver, restart
+installed before Sunshine can create a driver-backed controller. No license is
+needed. After installing or updating the driver, restart
 Windows.
 
 In Sunshine's Web UI, confirm that controller input is enabled and review the
@@ -207,14 +207,15 @@ battery or LED data.
 1. Confirm that the physical controller works on the client before starting
    Moonlight.
 2. Confirm that controller input is enabled in Sunshine.
-3. On Windows, check the Virtual HID Broker version and license status on
-   Sunshine's **Troubleshooting** page.
-   On macOS, check that the signed broker is running and its machine license
-   is active; see [macOS gamepad setup](macos-gamepad.md).
+3. On Windows, check the Virtual HID Broker version on Sunshine's
+   **Troubleshooting** page.
+   On macOS, check that the signed broker is running; see
+   [macOS gamepad setup](macos-gamepad.md).
 4. End and reconnect the stream, then check whether the host operating system
    sees a newly created controller.
-5. Review the Sunshine log for controller creation, driver, permission, or
-   license errors.
+5. Review the Sunshine log for controller creation, driver, or permission
+   errors. A `license_required` error means an older broker is still
+   installed; update it.
 
 On Windows, `joy.cpl` is useful for checking ordinary buttons, sticks, and
 triggers. Browser testers, Steam, and individual games use different controller

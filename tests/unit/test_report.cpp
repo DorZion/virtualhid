@@ -380,6 +380,29 @@ TEST(ReportTest, PacksDualShock4UsbReport) {
   EXPECT_EQ(report[35] & 0x80, 0);
 }
 
+TEST(ReportTest, DualShock4SensorTimestampIsNeverZero) {
+  const auto profile = lvh::profiles::dualshock4_usb();
+
+  // The first packed report starts the timestamp clock; consumers drop zero timestamps.
+  for (auto index = 0; index < 4; ++index) {
+    const auto report = lvh::reports::pack_input_report(profile, {});
+    ASSERT_EQ(report.size(), profile.input_report_size);
+    EXPECT_NE(report[10] | (report[11] << 8U), 0);
+  }
+}
+
+TEST(ReportTest, DualSenseDeviceTimestampIsNeverZero) {
+  for (const auto &[profile, payload_offset] : {
+         std::pair {lvh::profiles::dualsense_usb(), 1U},
+         std::pair {lvh::profiles::dualsense_bluetooth(), 2U},
+       }) {
+    const auto report = lvh::reports::pack_input_report(profile, {});
+    ASSERT_EQ(report.size(), profile.input_report_size);
+    const auto offset = payload_offset + 48U;
+    EXPECT_NE(report[offset] | (report[offset + 1U] << 8U) | (report[offset + 2U] << 16U) | (report[offset + 3U] << 24U), 0);
+  }
+}
+
 TEST(ReportTest, PacksDualShock4BluetoothReportWithCrc) {
   const auto profile = lvh::profiles::dualshock4_bluetooth();
 
@@ -499,6 +522,22 @@ TEST(ReportTest, KeepsMalformedPidRumbleReportRaw) {
   EXPECT_EQ(outputs[0].raw_report, report);
 }
 
+TEST(ReportTest, ParsesUsbFramedDualSenseOutputOnBluetoothProfile) {
+  const auto profile = lvh::profiles::dualsense();
+  std::vector<std::uint8_t> report(48, 0);
+  report[0] = 0x02;
+  report[1] = 0x01;
+  report[3] = 0x80;
+  report[4] = 0x40;
+
+  const auto outputs = lvh::reports::parse_output_reports(profile, report);
+
+  ASSERT_EQ(outputs.size(), 1U);
+  EXPECT_EQ(outputs[0].kind, lvh::GamepadOutputKind::rumble);
+  EXPECT_GT(outputs[0].low_frequency_rumble, 0U);
+  EXPECT_GT(outputs[0].high_frequency_rumble, 0U);
+}
+
 TEST(ReportTest, ParsesDualSenseOutputReportEvents) {
   const auto profile = lvh::profiles::dualsense_usb();
   std::vector<std::uint8_t> report(profile.output_report_size, 0);
@@ -531,6 +570,49 @@ TEST(ReportTest, ParsesDualSenseOutputReportEvents) {
   EXPECT_EQ(outputs[2].right_trigger_effect[0], 1);
   EXPECT_EQ(outputs[2].left_trigger_effect_type, 0x21);
   EXPECT_EQ(outputs[2].left_trigger_effect[0], 2);
+}
+
+TEST(ReportTest, ParsesDualSenseImprovedRumbleFlag) {
+  const auto profile = lvh::profiles::dualsense_usb();
+  std::vector<std::uint8_t> report(profile.output_report_size, 0);
+  report[0] = 0x02;
+  report[1] = 0x02;
+  report[3] = 0x80;
+  report[4] = 0x40;
+  report[39] = 0x04;
+
+  const auto outputs = lvh::reports::parse_output_reports(profile, report);
+
+  ASSERT_EQ(outputs.size(), 1U);
+  EXPECT_EQ(outputs[0].kind, lvh::GamepadOutputKind::rumble);
+  EXPECT_GT(outputs[0].low_frequency_rumble, 0U);
+  EXPECT_GT(outputs[0].high_frequency_rumble, 0U);
+}
+
+TEST(ReportTest, ParsesDualSenseReportWithoutValidFlagsAsRumbleStop) {
+  const auto profile = lvh::profiles::dualsense_usb();
+  std::vector<std::uint8_t> report(profile.output_report_size, 0);
+  report[0] = 0x02;
+  report[3] = 0x80;
+  report[4] = 0x40;
+
+  const auto outputs = lvh::reports::parse_output_reports(profile, report);
+
+  ASSERT_EQ(outputs.size(), 1U);
+  EXPECT_EQ(outputs[0].kind, lvh::GamepadOutputKind::rumble);
+  EXPECT_EQ(outputs[0].low_frequency_rumble, 0U);
+  EXPECT_EQ(outputs[0].high_frequency_rumble, 0U);
+}
+
+TEST(ReportTest, IgnoresDualSenseMotorBytesInHapticsSelectMode) {
+  const auto profile = lvh::profiles::dualsense_usb();
+  std::vector<std::uint8_t> report(profile.output_report_size, 0);
+  report[0] = 0x02;
+  report[1] = 0x02;
+  report[3] = 0x80;
+  report[4] = 0x40;
+
+  EXPECT_TRUE(lvh::reports::parse_output_reports(profile, report).empty());
 }
 
 TEST(ReportTest, ParsesDualSenseBluetoothOutputReportEvents) {

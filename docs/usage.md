@@ -119,17 +119,23 @@ temporarily unavailable, the submission fails and a later submission retries.
 A configured target viewport must be fully contained by its desktop and remains
 fixed for the mouse's lifetime; recreate the mouse when that geometry changes.
 
-## License and diagnostic tool
+## License compatibility and diagnostic tool
 
-On Windows and macOS, `get_license_status`, `activate_license`,
-`validate_license`, and `deactivate_license` manage the machine license through
-the installed broker. Treat activation keys as transient secrets; do not log or
-persist them. The broker, not the application, maintains the activation.
+`get_license_status`, `activate_license`, `validate_license`, and
+`deactivate_license` remain for source and binary compatibility. On every
+platform they return immediately with a successful, licensed result: plan
+`Unrestricted`, message `Activated`, `service_available` set, an activation
+limit of `UINT32_MAX`, and usage `1`. They do not contact a broker or the
+network, ignore any key or machine name, and report `active_devices` as `0`
+(untracked, not proof that no devices exist).
+Deactivation does not release anything. Do not use `service_available` to
+detect a running broker; device creation reports real backend failures.
+Applications that link `libvirtualhid` statically must rebuild or relink to
+pick up this behavior.
 
-The optional `virtualhid_control` tool creates test devices, displays
-capabilities and feedback, and manages the broker license on Windows and
-macOS. It lists devices created by that tool, not devices owned by other
-processes.
+The optional `virtualhid_control` tool creates test devices and displays
+capabilities and feedback. It lists devices created by that tool, not devices
+owned by other processes.
 
 See [platform support](platform-support.md) for availability and
 [development](development.md) for build commands and optional targets.

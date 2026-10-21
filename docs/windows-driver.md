@@ -20,36 +20,20 @@ Restart Windows if the installer requests it. The package installs the
 default. Applications can then use the normal C++ API without administrator
 privileges.
 
-A machine license is required to create a driver-backed device. Open
-`virtualhid_control.exe` to activate or refresh a license, select a gamepad
-profile, and create a test controller. The tool can submit buttons, axes,
+No license, account, or internet connection is needed to create a
+driver-backed device. Open `virtualhid_control.exe` to select a gamepad
+profile and create a test controller. The tool can submit buttons, axes,
 triggers, and mouse actions and show supported feedback. It lists devices
 created by the tool; controllers owned by another application are not listed.
 
-Applications may use the public `get_license_status`, `activate_license`,
-`validate_license`, and `deactivate_license` APIs to offer the same workflow.
-Do not log or store activation keys. A machine activation covers licensed
-gamepads, keyboards, and mice on that machine. Successful licensed gamepad
-creations are reported as usage on a later validation; routine license checks
-do not count as gamepad creation.
+The public licensing APIs remain for compatibility and always report an
+activated, unrestricted result; see [usage](usage.md). Upgrade the installed
+broker as well as applications: an older broker still enforces its previous
+license checks.
 
-The broker validates the license at startup and every 24 hours, retrying
-temporary failures about once a minute. While Polar validation is unavailable,
-new driver-backed creation is limited to one active licensed device in total,
-whether gamepad, keyboard, or mouse. Existing licensed devices remain for up
-to one hour; then the broker removes all but one. A yearly license must
-validate within 25 hours of its last successful validation or the remaining
-device is removed. After Windows restarts, a yearly license needs online
-validation before device creation. A previously activated lifetime license
-can keep or create one licensed device while Polar is unreachable, with no
-offline time limit. The broker keeps retrying validation about once a minute
-and returns to the normal 24-hour schedule after success. Confirmed revocation
-or deactivation removes existing licensed devices.
-
-Keyboard and mouse have Win32 fallbacks when the driver or license is
-unavailable. Those fallback inputs are not Raw Input-visible virtual HID
-devices. Unicode text and absolute mouse positioning always use the Win32
-path.
+Keyboard and mouse have Win32 fallbacks when the driver is unavailable. Those
+fallback inputs are not Raw Input-visible virtual HID devices. Unicode text
+and absolute mouse positioning always use the Win32 path.
 
 ## Check an installation
 
@@ -57,8 +41,8 @@ The broker service should be running, and a gamepad created by
 `virtualhid_control.exe` should appear in Windows device tools. Use
 `joy.cpl` to check buttons and axes. Steam, browsers, and games may use
 different input APIs, so test with the intended consumer too. If the
-application cannot create a controller, check its log and the license status
-in `virtualhid_control.exe`.
+application cannot create a controller, check its log and the creation error
+shown by `virtualhid_control.exe`.
 
 Installation and uninstall logs are under `C:\ProgramData\libvirtualhid`.
 The UMDF driver log is at

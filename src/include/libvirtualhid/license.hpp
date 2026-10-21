@@ -1,6 +1,9 @@
 /**
  * @file src/include/libvirtualhid/license.hpp
- * @brief Provider-neutral license management API.
+ * @brief License compatibility API.
+ *
+ * Licensing is not enforced. These declarations remain for source and binary
+ * compatibility, and every operation reports an activated, unrestricted license.
  */
 #pragma once
 
@@ -15,31 +18,31 @@
 namespace lvh {
 
   /**
-   * @brief Machine license states reported by the platform license service.
+   * @brief Compatibility license states. Current releases always report `licensed`.
    */
   enum class LicenseState {
-    unavailable,  ///< The platform license service is not available.
-    unlicensed,  ///< No active machine license is stored.
-    licensed,  ///< The stored machine license is active.
-    expired,  ///< The stored machine license has expired.
-    disabled,  ///< The stored machine license was disabled by the provider.
-    invalid,  ///< The stored machine license is invalid.
+    unavailable,  ///< Retained for compatibility; never reported by current releases.
+    unlicensed,  ///< Retained for compatibility; never reported by current releases.
+    licensed,  ///< Always reported by current releases.
+    expired,  ///< Retained for compatibility; never reported by current releases.
+    disabled,  ///< Retained for compatibility; never reported by current releases.
+    invalid,  ///< Retained for compatibility; never reported by current releases.
   };
 
   /**
-   * @brief Current machine license details.
+   * @brief Compatibility license details returned by the licensing API.
    */
   struct LicenseStatus {
-    bool service_available = false;  ///< Whether the platform license service answered the request.
-    LicenseState state = LicenseState::unavailable;  ///< Current machine license state.
-    std::uint32_t active_devices = 0;  ///< Virtual devices currently tracked by the license service.
-    std::uint32_t activation_limit = 0;  ///< Maximum machine activations allowed by the license.
-    std::uint32_t activation_usage = 0;  ///< Activations on this machine (0 or 1), not the license-wide total.
-    std::string plan_name;  ///< Human-readable plan name, when available.
-    std::string customer_email;  ///< Customer email associated with the license, when available.
-    std::string message;  ///< Human-readable license service status.
-    std::string purchase_url;  ///< Hosted page where a license can be purchased.
-    std::string manage_account_url;  ///< Hosted page where the customer can manage activations.
+    bool service_available = false;  ///< Always `true` in results from current releases; does not indicate a running broker.
+    LicenseState state = LicenseState::unavailable;  ///< Always `LicenseState::licensed` in current results.
+    std::uint32_t active_devices = 0;  ///< Always `0` from the public API, meaning untracked, not that no devices exist.
+    std::uint32_t activation_limit = 0;  ///< Always `UINT32_MAX` in current results.
+    std::uint32_t activation_usage = 0;  ///< Always `1` in current results.
+    std::string plan_name;  ///< Always `Unrestricted` in current results.
+    std::string customer_email;  ///< Always empty in current results.
+    std::string message;  ///< Always `Activated` in current results.
+    std::string purchase_url;  ///< Always empty in current results.
+    std::string manage_account_url;  ///< Always empty in current results.
 
     /**
      * @brief Check whether the machine has an active license.
@@ -69,40 +72,45 @@ namespace lvh {
   };
 
   /**
-   * @brief Read the locally stored machine license status without forcing remote validation.
+   * @brief Report the compatibility license status.
    *
-   * @return Current license result.
+   * Always succeeds immediately on every platform without broker, network,
+   * filesystem, or credential access. The result reports `LicenseState::licensed`,
+   * `service_available = true` (the local compatibility API is available, not a
+   * running broker), `active_devices = 0` (untracked here), an unrestricted
+   * `activation_limit` of `UINT32_MAX`, `activation_usage = 1`, plan name
+   * `"Unrestricted"`, and message `"Activated"`. Provider and customer fields are empty.
+   *
+   * @return Successful compatibility result.
    */
   LicenseResult get_license_status();
 
   /**
-   * @brief Activate a license on this machine.
+   * @brief Compatibility activation that always succeeds.
    *
-   * The license key is sent directly to the platform license service. The library does not
-   * persist a copy or expose it in the returned status.
-   * On Windows and macOS, authenticated local clients can activate or replace a
-   * machine license without elevation.
+   * Both arguments are ignored without being read, validated, logged, sent, or stored.
+   * Any value, including an empty key, succeeds.
    *
-   * @param license_key License key supplied by the customer.
-   * @param instance_name Optional customer-visible name for this machine activation.
-   * @return Activation result and latest license details.
+   * @param license_key Ignored.
+   * @param instance_name Ignored.
+   * @return The same successful compatibility result as get_license_status().
    */
   LicenseResult activate_license(std::string_view license_key, std::string_view instance_name = {});
 
   /**
-   * @brief Revalidate the stored machine license with the configured provider.
+   * @brief Compatibility validation that always succeeds without contacting a provider.
    *
-   * @return Validation result and latest license details.
+   * @return The same successful compatibility result as get_license_status().
    */
   LicenseResult validate_license();
 
   /**
-   * @brief Deactivate the stored license from this machine.
+   * @brief Compatibility deactivation that always succeeds.
    *
-   * On Windows and macOS, authenticated local clients can deactivate a license
-   * without elevation.
+   * The effective state stays activated. No provider activation is released and
+   * no stored data is changed.
    *
-   * @return Deactivation result and latest license details.
+   * @return The same successful compatibility result as get_license_status().
    */
   LicenseResult deactivate_license();
 

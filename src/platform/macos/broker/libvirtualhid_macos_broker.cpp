@@ -3,11 +3,11 @@
 
 /**
  * @file src/platform/macos/broker/libvirtualhid_macos_broker.cpp
- * @brief Root-owned licensed macOS virtual HID service.
+ * @brief Root-owned macOS virtual HID service.
  */
 
 #include "io.hpp"
-#include "license_manager.hpp"
+#include "license_response.hpp"
 #include "shared/playstation_feature_reports.hpp"
 #include "shared/switch_pro_protocol.hpp"
 
@@ -276,14 +276,14 @@ namespace lvh::detail::macos_broker {
       return request.type == MessageType::create && request.descriptor_size != 0 && request.descriptor_size <= max_descriptor_size && request.input_report_size != 0 && request.input_report_size <= max_report_size && request.output_report_size <= max_report_size && terminated(request.name) && terminated(request.manufacturer) && terminated(request.stable_id) && request.kind <= static_cast<std::uint32_t>(std::to_underlying(lvh::GamepadProfileKind::dualshock4)) && request.bus <= static_cast<std::uint32_t>(std::to_underlying(lvh::BusType::bluetooth));
     }
 
-    void receive_reports(DeviceSession &session, LicenseManager &licenses, bool evaluation, std::uint64_t device_id, std::uint32_t expected_input_size) {
-      // Only the HID input path needs interactive scheduling; licensing stays at its normal QoS.
+    void receive_reports(DeviceSession &session, std::uint32_t expected_input_size) {
+      // Only the HID input path needs interactive scheduling.
       static_cast<void>(::pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0));
       Message request;
       for (;;) {
         pollfd descriptor {.fd = session.fd, .events = POLLIN, .revents = 0};
         const int polled = ::poll(&descriptor, 1, 1000);
-        if (!licenses.device_is_authorized(evaluation, device_id) || (polled < 0 && errno != EINTR)) {
+        if (polled < 0 && errno != EINTR) {
           return;
         }
         if (polled == 0 || polled < 0) {
@@ -309,7 +309,7 @@ namespace lvh::detail::macos_broker {
       }
     }
 
-    void serve_client(int fd, LicenseManager &licenses) {
+    void serve_client(int fd, std::atomic<std::uint32_t> &active_devices) {
       timeval receive_timeout {.tv_sec = 5, .tv_usec = 0};
       timeval send_timeout {.tv_sec = 5, .tv_usec = 0};
       static_cast<void>(::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &receive_timeout, sizeof(receive_timeout)));
@@ -320,21 +320,12 @@ namespace lvh::detail::macos_broker {
         return;
       }
       if (request.type == MessageType::status || request.type == MessageType::activate || request.type == MessageType::validate || request.type == MessageType::deactivate) {
-        const auto response = licenses.handle(request);
-        static_cast<void>(send_message(fd, response));
+        static_cast<void>(send_message(fd, license_response(active_devices.load())));
         ::close(fd);
         return;
       }
       if (!valid_create_request(request)) {
         static_cast<void>(send_message(fd, response_with_error(lvh::ErrorCode::invalid_argument, "Invalid macOS gamepad request")));
-        ::close(fd);
-        return;
-      }
-      Message response;
-      bool evaluation = false;
-      std::string authorized_key;
-      if (!licenses.authorize_create(response, evaluation, authorized_key)) {
-        static_cast<void>(send_message(fd, response));
         ::close(fd);
         return;
       }
@@ -347,16 +338,16 @@ namespace lvh::detail::macos_broker {
         ::close(fd);
         return;
       }
-      const auto device_id = licenses.add_device(evaluation, authorized_key);
+      ++active_devices;
+      Message response;
       response.type = MessageType::response;
-      response.status = 0;
       static_cast<void>(session.send(response));
-      receive_reports(session, licenses, evaluation, device_id, request.input_report_size);
+      receive_reports(session, request.input_report_size);
       session.open = false;
       IOHIDUserDeviceCancel(device);
       static_cast<void>(dispatch_semaphore_wait(cancelled, DISPATCH_TIME_FOREVER));
       CFRelease(device);
-      licenses.remove_device(evaluation, device_id);
+      --active_devices;
       ::close(fd);
     }
 
@@ -399,14 +390,14 @@ int main() {
   if (::bind(listener, reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) {  // NOSONAR(cpp:S3630): POSIX sockets require a sockaddr pointer for sockaddr_un.
     return 1;
   }
-  // Local users need to connect, as with the Windows broker pipe; creation still needs a license.
+  // Local users need to connect, as with the Windows broker pipe.
   if (::chmod(socket_path, 0666) != 0) {  // NOSONAR(cpp:S2612): only root can replace the socket in its directory.
     return 1;
   }
   if (::listen(listener, 32) != 0) {
     return 1;
   }
-  auto licenses = std::make_shared<LicenseManager>();
+  auto active_devices = std::make_shared<std::atomic<std::uint32_t>>(0U);
   while (true) {
     const int client = ::accept(listener, nullptr, nullptr);
     if (client < 0) {
@@ -422,8 +413,8 @@ int main() {
       continue;
     }
     // Serve clients concurrently; a session can remain open for a game's lifetime.
-    std::jthread {[client, licenses] {  // NOSONAR(cpp:S5962): gamepad sessions can outlive accept; shared ownership keeps licensing alive.
-      serve_client(client, *licenses);
+    std::jthread {[client, active_devices] {  // NOSONAR(cpp:S5962): gamepad sessions can outlive accept; shared ownership keeps the counter alive.
+      serve_client(client, *active_devices);
     }}
       .detach();
   }

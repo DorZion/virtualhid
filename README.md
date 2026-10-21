@@ -16,15 +16,6 @@
   <a href="https://sonarcloud.io/project/overview?id=LizardByte_libvirtualhid"><img src="https://img.shields.io/sonar/quality_gate/LizardByte_libvirtualhid.svg?server=https%3A%2F%2Fsonarcloud.io&style=for-the-badge&logo=sonarqubecloud&label=sonarcloud" alt="SonarCloud"></a>
 </div>
 
-> [!IMPORTANT]
-> **🎮 Virtual HID Gamepad License**
->
-> A license is required for Windows driver-backed devices and macOS virtual
-> gamepads. Linux and FreeBSD backends do not require a license. Yearly and
-> lifetime options are available.
->
-> [![Buy a virtual HID license](https://img.shields.io/badge/Buy_a_virtual_HID_license-0078D4?style=for-the-badge)](https://buy.polar.sh/polar_cl_zj6Io5NVukXfZSl97ULtFvImfI5L1jbL2cSnc0Y72Pt)
-
 # Overview
 
 ## ℹ️ About
@@ -51,8 +42,8 @@ companion stay behind backend implementations.
 - Windows gamepads, keyboards, and Raw Input-visible mice through user-mode
   UMDF2 drivers. Xbox 360 uses a broker-owned XUSB software-device personality;
   the other profiles use Virtual HID Framework. Win32 keyboard and mouse
-  fallbacks remain available when the licensed driver path is unavailable.
-- macOS gamepads through a licensed, entitlement-bearing user-space HID broker.
+  fallbacks remain available when the driver path is unavailable.
+- macOS gamepads through an entitlement-bearing user-space HID broker.
   The generic, Xbox, PlayStation, and Switch Pro HID profiles use the same
   public API; keyboard and mouse input use CoreGraphics.
 - Output callbacks for profile-specific feedback such as ordinary and trigger
@@ -97,8 +88,8 @@ More complete examples live in `examples/`, including the streaming-host-oriente
   troubleshooting, and controller support references.
 - [Usage and API](docs/usage.md): CMake consumption, profiles, and API examples.
 - [Platform support](docs/platform-support.md): device availability, platform limits, and Linux permissions.
-- [Windows driver package](docs/windows-driver.md): installation, licensing, diagnostics, and contributor builds.
-- [macOS gamepad setup](docs/macos-gamepad.md): installation, licensing, and signed builds.
+- [Windows driver package](docs/windows-driver.md): installation, diagnostics, and contributor builds.
+- [macOS gamepad setup](docs/macos-gamepad.md): installation and signed builds.
 - [Streaming-host integration](docs/streaming-host-integration.md): integration pattern.
 - [Development](docs/development.md): build, test, and documentation commands.
 

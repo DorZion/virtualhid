@@ -89,6 +89,7 @@ namespace lvh::detail {
     using SyncThreadDesktopFunction = std::function<HDESK()>;
 
     constexpr auto switch_pro_report_interval = std::chrono::milliseconds {15};
+    constexpr auto playstation_report_interval = std::chrono::milliseconds {5};
 
     /**
      * @brief Thread-local desktop identity used for SendInput retry decisions.
@@ -1105,16 +1106,31 @@ namespace lvh::detail {
       OperationStatus close() override;
 
     private:
-      void stream_switch_pro_reports(std::stop_token stop_token);
-      void stop_switch_pro_report_stream();
+      /**
+       * @brief Resubmit the latest input report at a native controller cadence.
+       *
+       * @param stop_token Token that stops the stream.
+       * @param interval Delay between resubmitted reports.
+       */
+      void stream_reports(std::stop_token stop_token, std::chrono::milliseconds interval);
+
+      /**
+       * @brief Resubmit the latest input report once.
+       *
+       * @return False when the device is closed and streaming must stop.
+       */
+      bool resubmit_latest_report();
+
+      void stop_report_stream();
 
       std::shared_ptr<WindowsBackendContext> context_;
       std::shared_ptr<WindowsVhfDeviceState> state_;
       std::mutex input_report_mutex_;
       std::optional<std::vector<std::uint8_t>> last_input_report_;
-      std::condition_variable switch_pro_report_ready_;
-      std::mutex switch_pro_report_mutex_;
-      std::jthread switch_pro_report_thread_;
+      std::optional<GamepadState> last_input_state_;  ///< Latest PlayStation state, repacked for fresh timestamps.
+      std::condition_variable report_stream_ready_;
+      std::mutex report_stream_mutex_;
+      std::jthread report_stream_thread_;
       UniqueHandle xbox360_output_stop_event_ {make_unique_handle(nullptr)};
       std::jthread xbox360_output_thread_;
 
@@ -1262,7 +1278,7 @@ namespace lvh::detail {
       BackendMouseCreationResult create_hid_mouse(DeviceId id, const CreateMouseOptions &options);
 
       /**
-       * @brief Create a licensed driver-backed HID keyboard.
+       * @brief Create a driver-backed HID keyboard.
        *
        * Defined out of line because it constructs `WindowsHidKeyboard`, which
        * is declared after this class.
@@ -1462,10 +1478,22 @@ namespace lvh::detail {
     ):
         context_ {std::move(context)},
         state_ {std::move(state)} {
-      if (state_->profile.gamepad_kind == GamepadProfileKind::switch_pro) {
-        switch_pro_report_thread_ = std::jthread {[this](std::stop_token stop_token) {
-          stream_switch_pro_reports(stop_token);
-        }};
+      // Real Switch Pro and PlayStation controllers stream reports while idle;
+      // some HID readers block until the next report and miss a lone release.
+      switch (state_->profile.gamepad_kind) {
+        case GamepadProfileKind::switch_pro:
+          report_stream_thread_ = std::jthread {[this](std::stop_token stop_token) {
+            stream_reports(stop_token, switch_pro_report_interval);
+          }};
+          break;
+        case GamepadProfileKind::dualshock4:
+        case GamepadProfileKind::dualsense:
+          report_stream_thread_ = std::jthread {[this](std::stop_token stop_token) {
+            stream_reports(stop_token, playstation_report_interval);
+          }};
+          break;
+        default:
+          break;
       }
       if (state_->xbox360_transport) {
         xbox360_output_stop_event_ = make_unique_handle(::CreateEventW(nullptr, TRUE, FALSE, nullptr));
@@ -1478,15 +1506,15 @@ namespace lvh::detail {
     }
 
     WindowsGamepad::~WindowsGamepad() {
-      stop_switch_pro_report_stream();
+      stop_report_stream();
       stop_xbox360_output_stream();
     }
 
-    void WindowsGamepad::stream_switch_pro_reports(std::stop_token stop_token) {
-      auto next_report = std::chrono::steady_clock::now() + switch_pro_report_interval;
-      std::unique_lock report_lock {switch_pro_report_mutex_};
+    void WindowsGamepad::stream_reports(std::stop_token stop_token, std::chrono::milliseconds interval) {
+      auto next_report = std::chrono::steady_clock::now() + interval;
+      std::unique_lock report_lock {report_stream_mutex_};
       while (!stop_token.stop_requested()) {
-        static_cast<void>(switch_pro_report_ready_.wait_until(report_lock, next_report, [&stop_token] {
+        static_cast<void>(report_stream_ready_.wait_until(report_lock, next_report, [&stop_token] {
           return stop_token.stop_requested();
         }));
         if (stop_token.stop_requested()) {
@@ -1494,35 +1522,61 @@ namespace lvh::detail {
         }
 
         report_lock.unlock();
+        if (!resubmit_latest_report()) {
+          return;
+        }
+        report_lock.lock();
+
+        next_report += interval;
+        const auto now = std::chrono::steady_clock::now();
+        if (next_report <= now) {
+          next_report = now + interval;
+        }
+      }
+    }
+
+    bool WindowsGamepad::resubmit_latest_report() {
+      if (state_->profile.gamepad_kind == GamepadProfileKind::switch_pro) {
         std::vector<std::uint8_t> report;
         {
           std::lock_guard state_lock {state_->mutex_};
           if (!state_->open) {
-            return;
+            return false;
           }
           report = state_->switch_pro_input_report;
         }
         if (!report.empty()) {
           static_cast<void>(context_->submit_device_report(state_, report));
         }
-        report_lock.lock();
+        return true;
+      }
 
-        next_report += switch_pro_report_interval;
-        const auto now = std::chrono::steady_clock::now();
-        if (next_report <= now) {
-          next_report = now + switch_pro_report_interval;
+      // Hold the input lock through submission so a repeat cannot overtake a newer state.
+      std::lock_guard input_lock {input_report_mutex_};
+      {
+        std::lock_guard state_lock {state_->mutex_};
+        if (!state_->open) {
+          return false;
         }
       }
+      if (last_input_state_.has_value()) {
+        // Repack so PlayStation timestamps and sequence numbers keep advancing.
+        const auto report = reports::pack_input_report(state_->profile, *last_input_state_);
+        if (!report.empty()) {
+          static_cast<void>(context_->submit_device_report(state_, report));
+        }
+      }
+      return true;
     }
 
-    void WindowsGamepad::stop_switch_pro_report_stream() {
-      if (!switch_pro_report_thread_.joinable()) {
+    void WindowsGamepad::stop_report_stream() {
+      if (!report_stream_thread_.joinable()) {
         return;
       }
 
-      switch_pro_report_thread_.request_stop();
-      switch_pro_report_ready_.notify_all();
-      switch_pro_report_thread_.join();
+      report_stream_thread_.request_stop();
+      report_stream_ready_.notify_all();
+      report_stream_thread_.join();
     }
 
     void WindowsGamepad::stream_xbox360_output(std::stop_token stop_token) {
@@ -1580,6 +1634,7 @@ namespace lvh::detail {
       using enum ErrorCode;
 
       auto suppress_unchanged_report = false;
+      auto stream_report = false;
 
       {
         std::lock_guard lock {state_->mutex_};
@@ -1612,6 +1667,15 @@ namespace lvh::detail {
         suppress_unchanged_report =
           state_->profile.gamepad_kind == GamepadProfileKind::xbox_one ||
           state_->profile.gamepad_kind == GamepadProfileKind::xbox_series;
+        stream_report =
+          state_->profile.gamepad_kind == GamepadProfileKind::dualshock4 ||
+          state_->profile.gamepad_kind == GamepadProfileKind::dualsense;
+      }
+
+      if (stream_report) {
+        std::lock_guard lock {input_report_mutex_};
+        last_input_state_ = state;
+        return context_->submit_device_report(state_, report);
       }
 
       if (suppress_unchanged_report) {
@@ -1647,7 +1711,7 @@ namespace lvh::detail {
     }
 
     OperationStatus WindowsGamepad::close() {
-      stop_switch_pro_report_stream();
+      stop_report_stream();
       stop_xbox360_output_stream();
       return context_->close_device(state_);
     }
@@ -3094,7 +3158,7 @@ namespace lvh::detail {
         }
 
         auto effective_options = options;
-        effective_options.profile = windows::effective_vhf_gamepad_profile(options.profile);
+        effective_options.profile = windows::effective_vhf_gamepad_profile(options.profile, options.preserve_bus_type);
         auto result = context_->create_gamepad(id, effective_options);
         if (result) {
           result.effective_profile = std::move(effective_options.profile);
@@ -3110,10 +3174,10 @@ namespace lvh::detail {
           return {unsupported_profile_status("Windows keyboard backend requires a keyboard profile"), nullptr};
         }
 
-        // A driver-backed HID keyboard is visible to Raw Input and requires
-        // the same machine license as every broker-created driver device.
-        // Preserve SendInput only when that licensed path is unavailable;
-        // protocol and driver failures must remain visible to the caller.
+        // A driver-backed HID keyboard is visible to Raw Input. Preserve
+        // SendInput only when that path is unavailable or an older broker
+        // rejects it for licensing; protocol and driver failures must remain
+        // visible to the caller.
         if (context_) {
           auto hid = context_->create_hid_keyboard(id, options);
           if (hid.keyboard) {
@@ -3132,10 +3196,10 @@ namespace lvh::detail {
           return {unsupported_profile_status("Windows mouse backend requires a mouse profile"), nullptr};
         }
 
-        // A driver-backed HID mouse is visible to Raw Input and requires the
-        // same machine license as every broker-created driver device. Preserve
-        // the SendInput behavior only when that licensed path is unavailable;
-        // protocol and driver failures must remain visible to the caller.
+        // A driver-backed HID mouse is visible to Raw Input. Preserve the
+        // SendInput behavior only when that path is unavailable or an older
+        // broker rejects it for licensing; protocol and driver failures must
+        // remain visible to the caller.
         if (context_) {
           auto hid = context_->create_hid_mouse(id, options);
           if (hid.mouse) {

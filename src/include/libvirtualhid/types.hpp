@@ -32,10 +32,10 @@ namespace lvh {
     backend_unavailable,  ///< Requested backend is not available on this host.
     device_closed,  ///< Device operation was requested after the device closed.
     unsupported_profile,  ///< Backend cannot create the requested device profile.
-    license_required,  ///< Operation requires an active machine license.
-    license_invalid,  ///< Supplied or stored license is invalid.
-    activation_limit_reached,  ///< License has no remaining machine activations.
-    network_unavailable,  ///< License provider could not be reached.
+    license_required,  ///< Reported only by older brokers that still enforce licensing.
+    license_invalid,  ///< Reported only by older brokers that still enforce licensing.
+    activation_limit_reached,  ///< Reported only by older brokers that still enforce licensing.
+    network_unavailable,  ///< Reported only by older brokers that still enforce licensing.
     backend_failure,  ///< Backend-specific operation failed.
   };
 
@@ -443,6 +443,18 @@ namespace lvh {
      * @brief Consumer metadata associated with the device.
      */
     GamepadMetadata metadata;
+
+    /**
+     * @brief Keep the requested profile transport when the backend would otherwise substitute one.
+     *
+     * Windows normally presents Bluetooth PlayStation profiles with USB report
+     * framing because its virtual HID stack cannot advertise Bluetooth to
+     * HIDAPI consumers. Set this to keep the Bluetooth reports instead, for
+     * example so games do not expect USB-only DualSense audio haptics. The
+     * Windows device still accepts USB-framed output reports so HIDAPI
+     * consumers keep rumble and lighting. Other backends ignore this flag.
+     */
+    bool preserve_bus_type = false;
   };
 
   /**
