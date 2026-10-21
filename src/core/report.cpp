@@ -835,7 +835,10 @@ namespace lvh::reports {
         write_i16(report, payload_offset + 23U, scale_i16(normalized.acceleration->y, dualsense_acceleration_scale));
         write_i16(report, payload_offset + 25U, scale_i16(normalized.acceleration->z, dualsense_acceleration_scale));
       }
-      write_u32(report, payload_offset + 27U, dualsense_sensor_timestamp());
+      const auto sensor_timestamp = dualsense_sensor_timestamp();
+      write_u32(report, payload_offset + 27U, sensor_timestamp);
+      // Special K's XInput HID wrapper discards DualSense reports whose device timestamp is zero.
+      write_u32(report, payload_offset + 48U, std::max<std::uint32_t>(sensor_timestamp, 1U));
 
       write_dualsense_touch_contact(report, payload_offset + 32U, normalized.touchpad_contacts[0]);
       write_dualsense_touch_contact(report, payload_offset + 36U, normalized.touchpad_contacts[1]);

@@ -391,6 +391,18 @@ TEST(ReportTest, DualShock4SensorTimestampIsNeverZero) {
   }
 }
 
+TEST(ReportTest, DualSenseDeviceTimestampIsNeverZero) {
+  for (const auto &[profile, payload_offset] : {
+         std::pair {lvh::profiles::dualsense_usb(), 1U},
+         std::pair {lvh::profiles::dualsense_bluetooth(), 2U},
+       }) {
+    const auto report = lvh::reports::pack_input_report(profile, {});
+    ASSERT_EQ(report.size(), profile.input_report_size);
+    const auto offset = payload_offset + 48U;
+    EXPECT_NE(report[offset] | (report[offset + 1U] << 8U) | (report[offset + 2U] << 16U) | (report[offset + 3U] << 24U), 0);
+  }
+}
+
 TEST(ReportTest, PacksDualShock4BluetoothReportWithCrc) {
   const auto profile = lvh::profiles::dualshock4_bluetooth();
 
